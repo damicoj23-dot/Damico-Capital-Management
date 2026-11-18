@@ -129,12 +129,12 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ overrides
 
-    def _record_override(self, change: str, who: str, why: str) -> None:
+    def _record_override(self, change: str, who: str, why: str, as_of: datetime | None = None) -> None:
         self.store.append(
             OverrideEvent(
                 run_id=self.run_id,
                 cycle=self.cycle,
-                as_of=self._now(),
+                as_of=as_of or self._now(),
                 agent=ORCHESTRATOR,
                 agent_version=VERSION,
                 change=change,
@@ -152,9 +152,9 @@ class Orchestrator:
         self.overrides.paused_entries = False
         self._record_override("resume_entries", who, why)
 
-    def request_flatten(self, who: str, why: str) -> None:
+    def request_flatten(self, who: str, why: str, as_of: datetime | None = None) -> None:
         self.overrides.flatten_requested = True
-        self._record_override("flatten", who, why)
+        self._record_override("flatten", who, why, as_of)
 
     def block_symbol(self, symbol: str, who: str, why: str) -> None:
         self.overrides.blocked_symbols.add(symbol.upper())
@@ -295,6 +295,8 @@ class Orchestrator:
 
         if self.overrides.flatten_requested:
             await self._flatten(ctx, report)
+            if self.portfolio is not None:
+                self._record(ctx, await self._run_agent(self.portfolio, ctx, report))
             report.seconds = time.perf_counter() - started
             return report
 
@@ -338,6 +340,12 @@ class Orchestrator:
             self._record(ctx, await self._run_agent(self.portfolio, ctx, report))
 
         self._expire_pending(ctx, report)
+        try:
+            reason = self.risk.wants_flatten(ctx)
+        except Exception as exc:
+            reason = f"risk flatten check failed: {exc}"
+        if reason and not self.overrides.flatten_requested:
+            self.request_flatten(who=self.risk.name, why=reason, as_of=ctx.as_of)
         report.seconds = time.perf_counter() - started
         if report.seconds > self.config.cycle_interval.total_seconds():
             log.warning("cycle %s overran: %.1fs", self.cycle, report.seconds)
@@ -359,7 +367,7 @@ class Orchestrator:
         self.overrides.flatten_requested = False
         self.overrides.paused_entries = True
         self._pending.clear()
-        self._record_override("pause_entries", ORCHESTRATOR, "automatic pause after flatten")
+        self._record_override("pause_entries", ORCHESTRATOR, "automatic pause after flatten", ctx.as_of)
 
     async def _risk(
         self,

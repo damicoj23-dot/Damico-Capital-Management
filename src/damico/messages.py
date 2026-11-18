@@ -59,6 +59,8 @@ class MarketState(Message):
 
     regime: Literal["trending", "ranging", "volatile", "unknown"] = "unknown"
     tradable_symbols: tuple[str, ...] = ()
+    breadth: float = Field(default=0.0, ge=0.0, le=1.0)
+    """Share of the universe trading above its 50-day average."""
 
 
 class Signal(Message):
@@ -155,3 +157,15 @@ class HoldNotice(Message):
     proposal_id: str
     symbol: str
     reason: Literal["paused", "blocked_symbol", "awaiting_approval", "approval_expired"]
+
+
+class PortfolioSnapshot(Message):
+    kind: ClassVar[str] = "portfolio_snapshot"
+
+    equity: float
+    cash: float
+    gross_exposure: float
+    net_exposure: float
+    positions: int
+    drawdown: float
+    day_pnl: float

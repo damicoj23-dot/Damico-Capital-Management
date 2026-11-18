@@ -82,6 +82,11 @@ class RiskAgent(BaseAgent):
         self, ctx: AgentContext, proposals: Sequence[TradeProposal]
     ) -> Sequence[RiskDecision]: ...
 
+    def wants_flatten(self, ctx: AgentContext) -> str | None:
+        """Checked at the end of every cycle. Return a reason to close everything
+        (e.g. max drawdown hit), else None."""
+        return None
+
 
 class ExecutionAgent(BaseAgent):
     @abstractmethod
